@@ -1,0 +1,9 @@
+env/*
+build/*
+
+main.py
+
+*.pyc
+*.storage
+*.log
+*.state_machine
