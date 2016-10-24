@@ -1,13 +1,17 @@
-from .serializers import JSONSerializer
+import os
+
+from .conf import config
 
 
 class FileDict:
-    """Persistent storage on a disk accessible by states via storage['item_name']"""
+    """Persistent dict-like storage on a disk accessible by obj['item_name']"""
 
-    def __init__(self, filename, serializer=JSONSerializer):
+    def __init__(self, filename, serializer=None):
         self.filename = filename
+        os.makedirs(os.path.dirname(self.filename), exist_ok=True)
+
         self.cache = {}
-        self.serializer = serializer
+        self.serializer = serializer or config.serializer
 
     def update(self, kwargs):
         for key, value in kwargs.items():
@@ -71,11 +75,12 @@ class Log:
 
     UPDATE_CACHE_EVERY = 5
 
-    def __init__(self, filename, serializer=JSONSerializer):
-        open(filename, 'a').close()
+    def __init__(self, node_id, serializer=None):
+        self.filename = os.path.join(config.log_path, '{}.log'.format(node_id))
+        os.makedirs(os.path.dirname(self.filename), exist_ok=True)
+        open(self.filename, 'a').close()
 
-        self.filename = filename
-        self.serializer = serializer
+        self.serializer = serializer or config.serializer
         self.cache = self.read()
 
         # All States
@@ -153,6 +158,10 @@ class Log:
 class StateMachine(FileDict):
     """Raft Replicated State Machine — dict"""
 
+    def __init__(self, node_id):
+        filename = os.path.join(config.log_path, '{}.state_machine'.format(node_id))
+        super().__init__(filename)
+
     def apply(self, command):
         """Apply command to State Machine"""
 
@@ -165,6 +174,11 @@ class FileStorage(FileDict):
     — term — latest term server has seen (initialized to 0 on first boot, increases monotonically)
     — voted_for — candidate_id that received vote in current term (or None)
     """
+
+    def __init__(self, node_id):
+        filename = os.path.join(config.log_path, '{}.storage'.format(node_id))
+        super().__init__(filename)
+
     @property
     def term(self):
         return self['term']

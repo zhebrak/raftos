@@ -1,13 +1,13 @@
 import asyncio
 
 from .log import logger
-from .serializers import JSONSerializer
+from .conf import config
 
 
 class UDPProtocol(asyncio.DatagramProtocol):
-    def __init__(self, queue, request_handler, serializer=JSONSerializer):
+    def __init__(self, queue, request_handler, serializer=None):
         self.queue = queue
-        self.serializer = serializer
+        self.serializer = serializer or config.serializer
         self.request_handler = request_handler
 
     def __call__(self):
@@ -20,8 +20,6 @@ class UDPProtocol(asyncio.DatagramProtocol):
 
     def connection_made(self, transport):
         self.transport = transport
-        self.serializer = JSONSerializer()
-
         asyncio.ensure_future(self.start())
 
     def datagram_received(self, data, sender):

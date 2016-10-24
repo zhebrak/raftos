@@ -9,6 +9,11 @@ class MyClass:
 
 
 if __name__ == '__main__':
+    raftos.configure({
+        'serializer': raftos.serializers.JSONSerializer,
+        'log_path': '/var/log/raftos/'
+    })
+
     cluster = [
         '127.0.0.1:8000',
         '127.0.0.1:8001',

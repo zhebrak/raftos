@@ -12,15 +12,11 @@ def register(*address_list, cluster=None):
         cluster — [127.0.0.1:8001, 127.0.0.1:8002, ...]
     """
 
-    started_nodes = []
     for address in address_list:
         host, port = address.split(':')
         node = Node(address=(host, int(port)))
         node.start()
 
-        started_nodes.append(node)
-
-    for node in started_nodes:
         for address in cluster:
             host, port = address.split(':')
             port = int(port)

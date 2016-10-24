@@ -3,7 +3,7 @@ import functools
 import random
 import time
 
-from .serializers import JSONSerializer
+from .conf import config
 from .storage import FileStorage, Log, StateMachine
 
 
@@ -230,9 +230,13 @@ class Leader(BaseState):
                 if self.log.match_index[follower] >= index
             ])
 
-            # If index is matched on at least half + self for current term commit
-            if self.state.is_majority(commited_count + 1):
+            # If index is matched on at least half + self for current term — commit
+            is_current_term = True  # TODO: srsly
+            if self.state.is_majority(commited_count + 1) and is_current_term:
                 commited_on_majority = index
+
+            else:
+                break
 
         if commited_on_majority > self.log.commit_index:
             self.log.commit_index = commited_on_majority
@@ -245,7 +249,7 @@ class Leader(BaseState):
         asyncio.ensure_future(self.append_entries(entries=[entry]))
 
         while self.log.last_applied == last_applied:
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0.05)
 
     def heartbeat(self):
         asyncio.ensure_future(self.append_entries())
@@ -457,7 +461,7 @@ def wait_for_leader(func):
     def wrapped(cls, *args, **kwargs):
         loop = asyncio.get_event_loop()
         while cls.leader is None:
-            loop.run_until_complete(asyncio.sleep(0.1))
+            loop.run_until_complete(asyncio.sleep(0.05))
 
         return func(cls, *args, **kwargs)
     return wrapped
@@ -472,9 +476,9 @@ class State:
         self.server = server
         self.id = self._get_id(server.host, server.port)
 
-        self.storage = FileStorage('{}.storage'.format(self.id))
-        self.log = Log('{}.log'.format(self.id))
-        self.state_machine = StateMachine('{}.state_machine'.format(self.id))
+        self.storage = FileStorage(self.id)
+        self.log = Log(self.id)
+        self.state_machine = StateMachine(self.id)
 
         self.state = Follower(self)
 
@@ -533,6 +537,11 @@ class State:
         self.state.stop()
         self.state = new_state(self)
         self.state.start()
+
+    @property
+    def leader_id(self):
+        if self.leader:
+            return self.leader.id
 
 
 class Timer:

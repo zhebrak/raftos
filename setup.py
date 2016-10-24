@@ -5,7 +5,7 @@ from distutils.core import setup
 
 __version__ = '0.0.1'
 
-short_description = 'Statistics for Django projects'
+short_description = 'Raft replication in Python'
 
 setup(
     name='raftos',
