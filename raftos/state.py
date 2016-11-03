@@ -370,6 +370,8 @@ class Follower(BaseState):
     @validate_commit_index
     @validate_term
     def on_receive_append_entries(self, data):
+        self.state.set_leader(data['leader_id'])
+
         # Reply False if log doesn’t contain an entry at prev_log_index whose term matches prev_log_term
         try:
             prev_log_index = data['prev_log_index']
@@ -455,13 +457,22 @@ class Follower(BaseState):
         self.state.to_candidate()
 
 
-def wait_for_leader(func):
+class NotALeaderException(Exception):
+    pass
+
+
+def validate_leader(func):
 
     @functools.wraps(func)
     def wrapped(cls, *args, **kwargs):
         loop = asyncio.get_event_loop()
         while cls.leader is None:
             loop.run_until_complete(asyncio.sleep(0.05))
+
+        if not isinstance(cls.leader, Leader):
+            raise NotALeaderException(
+                'Leader is {}!'.format(cls.leader or 'not chosen yet')
+            )
 
         return func(cls, *args, **kwargs)
     return wrapped
@@ -470,6 +481,7 @@ def wait_for_leader(func):
 class State:
     """Abstraction layer between Server & Raft State and Storage/Log & Raft State"""
 
+    # <state_id> or None
     leader = None
 
     def __init__(self, server):
@@ -489,12 +501,12 @@ class State:
         self.state.stop()
 
     @classmethod
-    @wait_for_leader
+    @validate_leader
     def get_value(cls, name):
         return cls.leader.state_machine[name]
 
     @classmethod
-    @wait_for_leader
+    @validate_leader
     def set_value(cls, name, value):
         loop = asyncio.get_event_loop()
         loop.run_until_complete(cls.leader.execute_command({name: value}))
@@ -525,23 +537,23 @@ class State:
 
     def to_candidate(self):
         self._change_state(Candidate)
+        self.set_leader(None)
 
     def to_leader(self):
         self._change_state(Leader)
-        self.__class__.leader = self.state
+        self.set_leader(self.state)
 
     def to_follower(self):
         self._change_state(Follower)
+        self.set_leader(None)
+
+    def set_leader(self, leader):
+        self.__class__.leader = leader
 
     def _change_state(self, new_state):
         self.state.stop()
         self.state = new_state(self)
         self.state.start()
-
-    @property
-    def leader_id(self):
-        if self.leader:
-            return self.leader.id
 
 
 class Timer:

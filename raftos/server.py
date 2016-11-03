@@ -25,8 +25,15 @@ def register(*address_list, cluster=None):
                 node.update_cluster((host, port))
 
 
+def stop():
+    for node in Node.nodes:
+        node.stop()
+
+
 class Node:
     """Raft Node (Server)"""
+
+    nodes = []
 
     def __init__(self, address):
         self.host, self.port = address
@@ -36,6 +43,8 @@ class Node:
         self.state = State(self)
 
         self.loop = asyncio.get_event_loop()
+
+        self.__class__.nodes.append(self)
 
     def start(self):
         protocol = UDPProtocol(queue=self.requests, request_handler=self.request_handler)
