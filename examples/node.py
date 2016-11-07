@@ -1,11 +1,12 @@
 import argparse
 import asyncio
+from datetime import datetime
 import random
 
 import raftos
 
 
-class MyClass:
+class Class:
     data = raftos.Replicated(name='data')
 
 
@@ -23,14 +24,18 @@ if __name__ == '__main__':
     })
     raftos.register(node, cluster=cluster)
 
-    my_obj = MyClass()
+    obj = Class()
     while True:
-        number = random.randint(1, 1000)
-
         try:
-            my_obj.data = number
+            obj.data = {
+                'id': random.randint(1, 1000),
+                'data': {
+                    'amount': random.randint(1, 1000) * 1000,
+                    'created_at': datetime.now().strftime('%d/%m/%y %H:%M')
+                }
+            }
         except raftos.state.NotALeaderException:
-            pass
+            """Redirect request to raftos.get_leader()"""
 
         loop = asyncio.get_event_loop()
         loop.run_until_complete(asyncio.sleep(10))

@@ -4,6 +4,7 @@ import random
 import time
 
 from .conf import config
+from .exceptions import NotALeaderException
 from .storage import FileStorage, Log, StateMachine
 
 
@@ -224,14 +225,14 @@ class Leader(BaseState):
 
     def update_commit_index(self):
         commited_on_majority = 0
-        for index in range(1, self.log.commit_index + 2):
+        for index in range(max(self.log.commit_index, 1), len(self.log) + 1):
             commited_count = len([
                 1 for follower in self.log.match_index
                 if self.log.match_index[follower] >= index
             ])
 
             # If index is matched on at least half + self for current term — commit
-            is_current_term = True  # TODO: srsly
+            is_current_term = self.log[index]['term'] == self.storage.term
             if self.state.is_majority(commited_count + 1) and is_current_term:
                 commited_on_majority = index
 
@@ -455,10 +456,6 @@ class Follower(BaseState):
 
     def start_election(self):
         self.state.to_candidate()
-
-
-class NotALeaderException(Exception):
-    pass
 
 
 def validate_leader(func):

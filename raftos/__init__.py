@@ -12,7 +12,9 @@ __all__ = [
     'register',
     'stop',
 
-    'leader'
+    'get_leader'
 ]
 
-leader = State.leader
+
+def get_leader():
+    return State.leader
