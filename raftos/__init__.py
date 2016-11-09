@@ -1,7 +1,7 @@
 from .conf import configure, config
 from .replicator import Replicated
 from .server import register, stop
-from .state import State
+from .state import State, Leader
 
 
 __all__ = [
@@ -17,4 +17,8 @@ __all__ = [
 
 
 def get_leader():
-    return State.leader
+    leader = State.leader
+    if isinstance(leader, Leader):
+        return leader.id
+
+    return leader

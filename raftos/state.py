@@ -478,7 +478,9 @@ def validate_leader(func):
 class State:
     """Abstraction layer between Server & Raft State and Storage/Log & Raft State"""
 
-    # <state_id> or None
+    # <Leader object> if state is leader
+    # <state_id> if state is follower
+    # <None> if leader is not chosen yet
     leader = None
 
     def __init__(self, server):
