@@ -1,6 +1,6 @@
 # raftos
 
-[![Build Status](https://travis-ci.org/zhebrak/django-statsy.svg)](https://travis-ci.org/zhebrak/django-statsy)
+[![Build Status](https://travis-ci.org/zhebrak/raftos.svg)](https://travis-ci.org/zhebrak/raftos)
 
 Replication framework based on [Raft Algorithm](https://raft.github.io/) for fault-tolerant distributed systems.
 
