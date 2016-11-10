@@ -47,6 +47,9 @@ def validate_commit_index(func):
             self.state_machine.apply(self.log[not_applied]['command'])
             self.log.last_applied += 1
 
+            if isinstance(self, Leader):
+                self.apply_future.set_result(not_applied)
+
         return func(self, *args, **kwargs)
     return wrapped
 
@@ -221,13 +224,14 @@ class Leader(BaseState):
 
     def update_commit_index(self):
         commited_on_majority = 0
-        for index in range(max(self.log.commit_index, 1), len(self.log) + 1):
+        for index in range(self.log.commit_index + 1, len(self.log) + 1):
             commited_count = len([
                 1 for follower in self.log.match_index
                 if self.log.match_index[follower] >= index
             ])
 
             # If index is matched on at least half + self for current term — commit
+            # That may cause commit fails upon restart with stale logs
             is_current_term = self.log[index]['term'] == self.storage.term
             if self.state.is_majority(commited_count + 1) and is_current_term:
                 commited_on_majority = index
@@ -240,13 +244,12 @@ class Leader(BaseState):
 
     async def execute_command(self, command):
         """Write to log & send AppendEntries RPC"""
-        last_applied = self.log.last_applied
+        self.apply_future = asyncio.Future()
 
         entry = self.log.write(self.storage.term, command)
         asyncio.ensure_future(self.append_entries(entries=[entry]))
 
-        while self.log.last_applied == last_applied:
-            await asyncio.sleep(0.05)
+        await self.apply_future
 
     def heartbeat(self):
         asyncio.ensure_future(self.append_entries())
@@ -455,8 +458,9 @@ def validate_leader(func):
     @functools.wraps(func)
     def wrapped(cls, *args, **kwargs):
         loop = asyncio.get_event_loop()
-        while cls.leader is None:
-            loop.run_until_complete(asyncio.sleep(0.05))
+        if cls.leader is None:
+            cls.leader_future = asyncio.Future()
+            loop.run_until_complete(cls.leader_future)
 
         if not isinstance(cls.leader, Leader):
             raise NotALeaderException(
@@ -474,6 +478,9 @@ class State:
     # <state_id> if state is follower
     # <None> if leader is not chosen yet
     leader = None
+
+    # Await this future for election ending
+    leader_future = None
 
     def __init__(self, server):
         self.server = server
@@ -539,7 +546,10 @@ class State:
         self.set_leader(None)
 
     def set_leader(self, leader):
-        self.__class__.leader = leader
+        cls = self.__class__
+        cls.leader = leader
+        if leader and not cls.leader_future.done():
+            cls.leader_future.set_result(cls.leader)
 
     def _change_state(self, new_state):
         self.state.stop()

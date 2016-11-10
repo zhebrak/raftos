@@ -11,7 +11,7 @@ class Configuration:
             'serializer': JSONSerializer,
             'log_path': '/var/log/raftos/',
             'heartbeat_interval': 0.5,
-            'election_interval': (2, 4)
+            'election_interval': (4, 8)
         }
 
     def configure(self, kwargs):
