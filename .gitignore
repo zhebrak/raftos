@@ -1,7 +1,9 @@
 env/*
 build/*
+dist/*
 
-main.py
+topypi
+MANIFEST
 
 *.pyc
 *.storage

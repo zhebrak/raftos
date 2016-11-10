@@ -8,10 +8,6 @@ from .exceptions import NotALeaderException
 from .storage import FileStorage, Log, StateMachine
 
 
-HEARTBEAT_INTERVAL = (1, 2)
-ELECTION_INTERVAL = (4, 9)
-
-
 def validate_term(func):
     """Compares current term and request term:
         if current term is stale:
@@ -132,7 +128,7 @@ class Leader(BaseState):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.heartbeat_timer = Timer(self.heartbeat_interval, self.heartbeat)
+        self.heartbeat_timer = Timer(config.heartbeat_interval, self.heartbeat)
 
     def start(self):
         self.init_log()
@@ -255,10 +251,6 @@ class Leader(BaseState):
     def heartbeat(self):
         asyncio.ensure_future(self.append_entries())
 
-    @staticmethod
-    def heartbeat_interval():
-        return random.uniform(*HEARTBEAT_INTERVAL)
-
 
 class Candidate(BaseState):
     """Raft Candidate
@@ -330,7 +322,7 @@ class Candidate(BaseState):
 
     @staticmethod
     def election_interval():
-        return random.uniform(*ELECTION_INTERVAL)
+        return random.uniform(*config.election_interval)
 
 
 class Follower(BaseState):
@@ -366,7 +358,7 @@ class Follower(BaseState):
 
     @staticmethod
     def election_interval():
-        return random.uniform(*ELECTION_INTERVAL)
+        return random.uniform(*config.election_interval)
 
     @validate_commit_index
     @validate_term
@@ -582,4 +574,4 @@ class Timer:
         self.start()
 
     def get_interval(self):
-        return self.interval() if callable(self.interval) else interval
+        return self.interval() if callable(self.interval) else self.interval
