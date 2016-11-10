@@ -548,7 +548,7 @@ class State:
     def set_leader(self, leader):
         cls = self.__class__
         cls.leader = leader
-        if leader and not cls.leader_future.done():
+        if cls.leader and cls.leader_future and not cls.leader_future.done():
             cls.leader_future.set_result(cls.leader)
 
     def _change_state(self, new_state):

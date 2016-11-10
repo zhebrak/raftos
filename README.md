@@ -2,7 +2,7 @@
 
 [![Build Status](https://travis-ci.org/zhebrak/raftos.svg)](https://travis-ci.org/zhebrak/raftos)
 
-Replication framework based on [Raft Algorithm](https://raft.github.io/) for fault-tolerant distributed systems.
+Asynchronous replication framework based on [Raft Algorithm](https://raft.github.io/) for fault-tolerant distributed systems.
 
 ![](https://raw.github.com/zhebrak/raftos/master/docs/img/raft_rsm.png)
 
