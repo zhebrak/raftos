@@ -26,6 +26,9 @@ if __name__ == '__main__':
 
     obj = Class()
     while True:
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(asyncio.sleep(5))
+
         try:
             obj.data = {
                 'id': random.randint(1, 1000),
@@ -34,8 +37,7 @@ if __name__ == '__main__':
                     'created_at': datetime.now().strftime('%d/%m/%y %H:%M')
                 }
             }
-        except raftos.state.NotALeaderException:
+        except raftos.exceptions.NotALeaderException:
             """Redirect request to raftos.get_leader()"""
 
-        loop = asyncio.get_event_loop()
         loop.run_until_complete(asyncio.sleep(10))

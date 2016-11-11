@@ -47,8 +47,10 @@ def validate_commit_index(func):
             self.state_machine.apply(self.log[not_applied]['command'])
             self.log.last_applied += 1
 
-            if isinstance(self, Leader):
+            try:
                 self.apply_future.set_result(not_applied)
+            except (asyncio.futures.InvalidStateError, AttributeError):
+                pass
 
         return func(self, *args, **kwargs)
     return wrapped
@@ -100,7 +102,7 @@ class BaseState:
 
         Results:
             term — for leader to update itself
-            success — True if follower contained entry matching prev_log_indexog and prev_log_term
+            success — True if follower contained entry matching prev_log_index and prev_log_term
 
         Receiver implementation:
             1. Reply False if term < self term
@@ -150,10 +152,9 @@ class Leader(BaseState):
             follower: 0 for follower in self.state.cluster
         }
 
-    async def append_entries(self, entries=None, destination=None):
+    async def append_entries(self, destination=None):
         """AppendEntries RPC — replicate log entries / heartbeat
         Args:
-            entries — <list> of log entries
             destination — destination id
 
         Request params:
@@ -166,31 +167,30 @@ class Leader(BaseState):
             entries[] — log entries to store (empty for heartbeat)
         """
 
-        data = {
-            'type': 'append_entries',
-
-            'term': self.storage.term,
-            'leader_id': self.id,
-            'commit_index': self.log.commit_index,
-
-            'entries': entries or [],
-        }
-
         # Send AppendEntries RPC to destination if specified or broadcast to everyone
-
         destination_list = [destination] if destination else self.state.cluster
         for destination in destination_list:
+            data = {
+                'type': 'append_entries',
+
+                'term': self.storage.term,
+                'leader_id': self.id,
+                'commit_index': self.log.commit_index,
+            }
+
             next_index = self.log.next_index[destination]
             prev_index = next_index - 1
 
             if self.log.last_log_index >= next_index:
-                data.update({
-                    'entries': [self.log[next_index]]
-                })
+                data['entries'] = [self.log[next_index]]
+
+            else:
+                # heartbeat
+                data['entries'] = []
 
             data.update({
                 'prev_log_index': prev_index,
-                'prev_log_term': self.log[prev_index]['term'] if self.log else 0
+                'prev_log_term': self.log[prev_index]['term'] if self.log and prev_index else 0
             })
 
             asyncio.ensure_future(self.state.send(data, destination))
@@ -201,30 +201,22 @@ class Leader(BaseState):
         sender_id = self.state.get_sender_id(data['sender'])
 
         if not data['success']:
-            self.log.next_index[sender_id] -= 1
+            self.log.next_index[sender_id] = max(self.log.next_index[sender_id] - 1, 1)
 
         else:
-                self.log.next_index[sender_id] = data['last_new_entry_index'] + 1
-                self.log.match_index[sender_id] = data['last_new_entry_index']
+            self.log.next_index[sender_id] = data['last_log_index'] + 1
+            self.log.match_index[sender_id] = data['last_log_index']
 
-                self.update_commit_index()
+            self.update_commit_index()
 
-        next_index = self.log.next_index[sender_id]
-        try:
-            # Send AppendEntries RPC to continue updating fast-forward log (data['success'] == False)
-            # or in case there are new entries to sync (data['success'] == data['updated'] == True)
-            asyncio.ensure_future(
-                self.append_entries(
-                    entries=[self.log[next_index]],
-                    destination=sender_id
-                )
-            )
-        except IndexError:
-            pass
+        # Send AppendEntries RPC to continue updating fast-forward log (data['success'] == False)
+        # or in case there are new entries to sync (data['success'] == data['updated'] == True)
+        if self.log.last_log_index >= self.log.next_index[sender_id]:
+            asyncio.ensure_future(self.append_entries(destination=sender_id))
 
     def update_commit_index(self):
         commited_on_majority = 0
-        for index in range(self.log.commit_index + 1, len(self.log) + 1):
+        for index in range(self.log.commit_index + 1, self.log.last_log_index + 1):
             commited_count = len([
                 1 for follower in self.log.match_index
                 if self.log.match_index[follower] >= index
@@ -247,7 +239,7 @@ class Leader(BaseState):
         self.apply_future = asyncio.Future()
 
         entry = self.log.write(self.storage.term, command)
-        asyncio.ensure_future(self.append_entries(entries=[entry]))
+        asyncio.ensure_future(self.append_entries())
 
         await self.apply_future
 
@@ -371,7 +363,7 @@ class Follower(BaseState):
         # Reply False if log doesn’t contain an entry at prev_log_index whose term matches prev_log_term
         try:
             prev_log_index = data['prev_log_index']
-            if prev_log_index > len(self.log) or (
+            if prev_log_index > self.log.last_log_index or (
                 prev_log_index and self.log[prev_log_index]['term'] != data['prev_log_term']
             ):
                 response = {
@@ -388,26 +380,20 @@ class Follower(BaseState):
         # delete the existing entry and all that follow it
         new_index = data['prev_log_index'] + 1
         try:
-            if self.log[new_index]['term'] != data['term']:
+            if self.log[new_index]['term'] != data['term'] or (
+                self.log.last_log_index != prev_log_index
+            ):
                 self.log.erase_from(new_index)
         except IndexError:
             pass
 
-        # Append any new entries not already in the log
-        try:
-            offset = 0
-            while self.log[new_index]['term'] == data['entries'][offset]['term']:
-                offset += 1
-        except IndexError:
-            pass
-
-        for entry in data['entries'][offset:]:
+        # It's always one entry for now
+        for entry in data['entries']:
             self.log.write(entry['term'], entry['command'])
 
         # Update commit index if necessary
-        last_new_entry_index = data['prev_log_index'] + len(data['entries'])
         if self.log.commit_index < data['commit_index']:
-            self.log.commit_index = min(data['commit_index'], last_new_entry_index)
+            self.log.commit_index = min(data['commit_index'], self.log.last_log_index)
 
         # Respond True since entry matching prev_log_index and prev_log_term was found
         response = {
@@ -415,7 +401,7 @@ class Follower(BaseState):
             'term': self.storage.term,
             'success': True,
 
-            'last_new_entry_index': last_new_entry_index
+            'last_log_index': self.log.last_log_index
         }
         asyncio.ensure_future(self.state.send(response, data['sender']))
 

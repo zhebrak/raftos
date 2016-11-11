@@ -15,8 +15,10 @@ class UDPProtocol(asyncio.DatagramProtocol):
 
     async def start(self):
         while not self.transport.is_closing():
-            data, destination = await self.queue.get()
-            self.transport.sendto(self.serializer.pack(data), destination)
+            request = await self.queue.get()
+            self.transport.sendto(
+                self.serializer.pack(request['data']), request['destination']
+            )
 
     def connection_made(self, transport):
         self.transport = transport

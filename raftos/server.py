@@ -77,7 +77,10 @@ class Node:
             host, port = destination.split(':')
             destination = host, int(port)
 
-        await self.requests.put((data, destination))
+        await self.requests.put({
+            'data': data,
+            'destination': destination
+        })
 
     def broadcast(self, data):
         """Sends data to all Nodes in cluster (cluster list does not contain self Node)"""
