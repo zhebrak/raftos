@@ -1,12 +1,18 @@
 # raftos
 
-[![Build Status](https://travis-ci.org/zhebrak/raftos.svg)](https://travis-ci.org/zhebrak/raftos)
+[![Build Status](https://travis-ci.org/zhebrak/raftos.svg)](https://travis-ci.org/zhebrak/raftos) [![PyPI version](https://badge.fury.io/py/raftos.svg)](http://badge.fury.io/py/raftos)
 
 Asynchronous replication framework based on [Raft Algorithm](https://raft.github.io/) for fault-tolerant distributed systems.
 
 ![](https://raw.github.com/zhebrak/raftos/master/docs/img/raft_rsm.png)
 
-##### Register nodes on every server
+#### Install
+
+```
+pip install raftos
+```
+
+#### Register nodes on every server
 
 ```python
 import raftos
@@ -24,7 +30,7 @@ raftos.register(
 )
 ```
 
-##### Data replication
+#### Data replication
 
 ```python
 class Class:
@@ -43,12 +49,13 @@ obj.data = {
 }
 ```
 
-##### In case you only need consensus algorithm with leader election
+#### In case you only need consensus algorithm with leader election
 
 ```python
 if raftos.get_leader() == current_node:
-    make_request()
+    # make request or respond to a client
 ```
+Whenever the leader falls, someone takes its place.
 
 
 [Paper](https://raft.github.io/raft.pdf) & [Video](https://www.youtube.com/watch?v=YbZ3zDzDnrw)
