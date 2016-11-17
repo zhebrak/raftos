@@ -1,0 +1,2 @@
+cryptography==1.5.3
+msgpack-python==0.4.8

@@ -1,11 +1,12 @@
 # coding: utf-8
 
-from distutils.core import setup
+from setuptools import setup
 
 
-__version__ = '0.0.2'
+__version__ = '0.1'
 
 short_description = 'Raft replication in Python'
+requirements = [req.strip() for req in open('requirements.txt').readlines()]
 
 setup(
     name='raftos',
@@ -18,6 +19,7 @@ setup(
     license='MIT',
     url='https://github.com/zhebrak/raftos',
     keywords=['python', 'raft', 'replication'],
+    install_requires=requirements,
     include_package_data=True,
     classifiers=[],
 )

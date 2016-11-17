@@ -134,14 +134,23 @@ class Leader(BaseState):
         super().__init__(*args, **kwargs)
 
         self.heartbeat_timer = Timer(config.heartbeat_interval, self.heartbeat)
+        self.step_down_timer = Timer(
+            config.step_down_missed_heartbeats * config.heartbeat_interval,
+            self.state.to_follower
+        )
+
+        self.request_id = 0
+        self.response_map = {}
 
     def start(self):
         self.init_log()
         self.heartbeat()
         self.heartbeat_timer.start()
+        self.step_down_timer.start()
 
     def stop(self):
         self.heartbeat_timer.stop()
+        self.step_down_timer.stop()
 
     def init_log(self):
         self.log.next_index = {
@@ -176,6 +185,8 @@ class Leader(BaseState):
                 'term': self.storage.term,
                 'leader_id': self.id,
                 'commit_index': self.log.commit_index,
+
+                'request_id': self.request_id
             }
 
             next_index = self.log.next_index[destination]
@@ -185,7 +196,6 @@ class Leader(BaseState):
                 data['entries'] = [self.log[next_index]]
 
             else:
-                # heartbeat
                 data['entries'] = []
 
             data.update({
@@ -199,6 +209,17 @@ class Leader(BaseState):
     @validate_term
     def on_receive_append_entries_response(self, data):
         sender_id = self.state.get_sender_id(data['sender'])
+
+        # Count all unqiue responses per particular heartbeat interval
+        # and step down via <step_down_timer> if leader doesn't get majority of responses for
+        # <step_down_missed_heartbeats> heartbeats
+
+        if data['request_id'] in self.response_map:
+            self.response_map[data['request_id']].add(sender_id)
+
+            if self.state.is_majority(len(self.response_map[data['request_id']]) + 1):
+                self.step_down_timer.reset()
+                del self.response_map[data['request_id']]
 
         if not data['success']:
             self.log.next_index[sender_id] = max(self.log.next_index[sender_id] - 1, 1)
@@ -244,6 +265,8 @@ class Leader(BaseState):
         await self.apply_future
 
     def heartbeat(self):
+        self.request_id += 1
+        self.response_map[self.request_id] = set()
         asyncio.ensure_future(self.append_entries())
 
 
@@ -369,7 +392,9 @@ class Follower(BaseState):
                 response = {
                     'type': 'append_entries_response',
                     'term': self.storage.term,
-                    'success': False
+                    'success': False,
+
+                    'request_id': data['request_id']
                 }
                 asyncio.ensure_future(self.state.send(response, data['sender']))
                 return
@@ -401,7 +426,8 @@ class Follower(BaseState):
             'term': self.storage.term,
             'success': True,
 
-            'last_log_index': self.log.last_log_index
+            'last_log_index': self.log.last_log_index,
+            'request_id': data['request_id']
         }
         asyncio.ensure_future(self.state.send(response, data['sender']))
 
@@ -439,7 +465,7 @@ class Follower(BaseState):
         self.state.to_candidate()
 
 
-def validate_leader(func):
+def leader_required(func):
 
     @functools.wraps(func)
     def wrapped(cls, *args, **kwargs):
@@ -485,12 +511,12 @@ class State:
         self.state.stop()
 
     @classmethod
-    @validate_leader
+    @leader_required
     def get_value(cls, name):
         return cls.leader.state_machine[name]
 
     @classmethod
-    @validate_leader
+    @leader_required
     def set_value(cls, name, value):
         loop = asyncio.get_event_loop()
         loop.run_until_complete(cls.leader.execute_command({name: value}))

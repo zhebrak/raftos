@@ -20,7 +20,8 @@ if __name__ == '__main__':
     node = '127.0.0.1:{}'.format(args.node)
 
     raftos.configure({
-        'log_path': './'
+        'log_path': './',
+        'serializer': raftos.serializers.JSONSerializer
     })
     raftos.register(node, cluster=cluster)
 

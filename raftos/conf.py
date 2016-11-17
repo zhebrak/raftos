@@ -1,4 +1,4 @@
-from .serializers import JSONSerializer
+from .serializers import MessagePackSerializer
 
 
 class Configuration:
@@ -8,15 +8,33 @@ class Configuration:
     @staticmethod
     def default_settings():
         return {
-            'serializer': JSONSerializer,
             'log_path': '/var/log/raftos/',
-            'heartbeat_interval': 0.5,
-            'election_interval': (4, 8)
+            'serializer': MessagePackSerializer,
+
+            'heartbeat_interval': 0.3,
+
+            # Leader will step down if it doesn't have a majority of follower's responses
+            # for this amount heartbeats
+            'step_down_missed_heartbeats': 5,
+
+            # Randomized election timeout
+            # [step_down_missed_heartbeats, M * step_down_missed_heartbeats]
+            'election_interval_spread': 3,
+
+            # For UDP messages encryption
+            'secret_key': b'raftos sample secret key',
+            'salt': b'raftos sample salt'
         }
 
     def configure(self, kwargs):
         for param, value in kwargs.items():
             setattr(self, param.lower(), value)
+
+        self.step_down_interval = self.heartbeat_interval * self.step_down_missed_heartbeats
+        self.election_interval = (
+            self.step_down_interval,
+            self.step_down_interval * self.election_interval_spread
+        )
 
 
 config = Configuration()
