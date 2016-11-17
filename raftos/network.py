@@ -2,6 +2,7 @@ import asyncio
 
 from .log import logger
 from .conf import config
+from .cryptor import cryptor
 
 
 class UDPProtocol(asyncio.DatagramProtocol):
@@ -16,16 +17,15 @@ class UDPProtocol(asyncio.DatagramProtocol):
     async def start(self):
         while not self.transport.is_closing():
             request = await self.queue.get()
-            self.transport.sendto(
-                self.serializer.pack(request['data']), request['destination']
-            )
+            data = cryptor.encrypt(self.serializer.pack(request['data']))
+            self.transport.sendto(data, request['destination'])
 
     def connection_made(self, transport):
         self.transport = transport
         asyncio.ensure_future(self.start())
 
     def datagram_received(self, data, sender):
-        data = self.serializer.unpack(data)
+        data = self.serializer.unpack(cryptor.decrypt(data))
         data.update({
             'sender': sender
         })

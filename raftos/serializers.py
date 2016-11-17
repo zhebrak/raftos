@@ -1,4 +1,5 @@
 import json
+import msgpack
 
 
 class JSONSerializer:
@@ -10,3 +11,13 @@ class JSONSerializer:
     def unpack(data):
         decoded = data.decode() if isinstance(data, bytes) else data
         return json.loads(decoded)
+
+
+class MessagePackSerializer:
+    @staticmethod
+    def pack(data):
+        return msgpack.packb(data, use_bin_type=True)
+
+    @staticmethod
+    def unpack(data):
+        return msgpack.unpackb(data, use_list=True, encoding='utf-8')
