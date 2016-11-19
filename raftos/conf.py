@@ -23,7 +23,11 @@ class Configuration:
 
             # For UDP messages encryption
             'secret_key': b'raftos sample secret key',
-            'salt': b'raftos sample salt'
+            'salt': b'raftos sample salt',
+
+            # Election callbacks
+            'on_leader': lambda: None,
+            'on_follower': lambda: None
         }
 
     def configure(self, kwargs):

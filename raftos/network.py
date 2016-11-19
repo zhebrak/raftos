@@ -6,10 +6,11 @@ from .cryptor import cryptor
 
 
 class UDPProtocol(asyncio.DatagramProtocol):
-    def __init__(self, queue, request_handler, serializer=None):
+    def __init__(self, queue, request_handler, loop, serializer=None):
         self.queue = queue
         self.serializer = serializer or config.serializer
         self.request_handler = request_handler
+        self.loop = loop
 
     def __call__(self):
         return self
@@ -22,7 +23,7 @@ class UDPProtocol(asyncio.DatagramProtocol):
 
     def connection_made(self, transport):
         self.transport = transport
-        asyncio.ensure_future(self.start())
+        asyncio.ensure_future(self.start(), loop=self.loop)
 
     def datagram_received(self, data, sender):
         data = self.serializer.unpack(cryptor.decrypt(data))

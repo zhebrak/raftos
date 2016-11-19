@@ -5,16 +5,17 @@ from .network import UDPProtocol
 from .state import State
 
 
-def register(*address_list, cluster=None):
+def register(*address_list, cluster=None, loop=None):
     """Start Raft node (server)
     Args:
         address_list — 127.0.0.1:8000 [, 127.0.0.1:8001 ...]
         cluster — [127.0.0.1:8001, 127.0.0.1:8002, ...]
     """
 
+    loop = loop or asyncio.get_event_loop()
     for address in address_list:
         host, port = address.split(':')
-        node = Node(address=(host, int(port)))
+        node = Node(address=(host, int(port)), loop=loop)
         node.start()
 
         for address in cluster:
@@ -35,21 +36,26 @@ class Node:
 
     nodes = []
 
-    def __init__(self, address):
+    def __init__(self, address, loop):
         self.host, self.port = address
         self.cluster = set()
 
-        self.requests = asyncio.Queue()
+        self.loop = loop
         self.state = State(self)
-
-        self.loop = asyncio.get_event_loop()
-
+        self.requests = asyncio.Queue(loop=self.loop)
         self.__class__.nodes.append(self)
 
     def start(self):
-        protocol = UDPProtocol(queue=self.requests, request_handler=self.request_handler)
+        protocol = UDPProtocol(
+            queue=self.requests,
+            request_handler=self.request_handler,
+            loop=self.loop
+        )
         address = self.host, self.port
-        task = asyncio.Task(self.loop.create_datagram_endpoint(protocol, local_addr=address))
+        task = asyncio.Task(
+            self.loop.create_datagram_endpoint(protocol, local_addr=address),
+            loop=self.loop
+        )
         self.transport, _ = self.loop.run_until_complete(task)
         self.state.start()
 
@@ -85,4 +91,4 @@ class Node:
     def broadcast(self, data):
         """Sends data to all Nodes in cluster (cluster list does not contain self Node)"""
         for destination in self.cluster:
-            asyncio.ensure_future(self.send(data, destination))
+            asyncio.ensure_future(self.send(data, destination), loop=self.loop)

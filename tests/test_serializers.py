@@ -5,7 +5,10 @@ import raftos
 
 class TestSerializers(unittest.TestCase):
     def setUp(self):
-        self.serializers = [raftos.serializers.JSONSerializer]
+        self.serializers = [
+            raftos.serializers.JSONSerializer,
+            raftos.serializers.MessagePackSerializer
+        ]
 
     def _test_pack_unpack(self, test_data):
         for serializer in self.serializers:

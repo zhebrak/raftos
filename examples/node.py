@@ -10,6 +10,23 @@ class Class:
     data = raftos.Replicated(name='data')
 
 
+def run(node_id):
+    obj = Class()
+    loop = asyncio.get_event_loop()
+
+    while True:
+        loop.run_until_complete(asyncio.sleep(5))
+
+        if raftos.get_leader() == node_id:
+            obj.data = {
+                'id': random.randint(1, 1000),
+                'data': {
+                    'amount': random.randint(1, 1000) * 1000,
+                    'created_at': datetime.now().strftime('%d/%m/%y %H:%M')
+                }
+            }
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--node')
@@ -23,22 +40,6 @@ if __name__ == '__main__':
         'log_path': './',
         'serializer': raftos.serializers.JSONSerializer
     })
+
     raftos.register(node, cluster=cluster)
-
-    obj = Class()
-    while True:
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(asyncio.sleep(5))
-
-        try:
-            obj.data = {
-                'id': random.randint(1, 1000),
-                'data': {
-                    'amount': random.randint(1, 1000) * 1000,
-                    'created_at': datetime.now().strftime('%d/%m/%y %H:%M')
-                }
-            }
-        except raftos.exceptions.NotALeaderException:
-            """Redirect request to raftos.get_leader()"""
-
-        loop.run_until_complete(asyncio.sleep(10))
+    run(node)

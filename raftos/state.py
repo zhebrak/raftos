@@ -6,6 +6,7 @@ import time
 from .conf import config
 from .exceptions import NotALeaderException
 from .storage import FileStorage, Log, StateMachine
+from .timer import Timer
 
 
 def validate_term(func):
@@ -31,7 +32,7 @@ def validate_term(func):
                 'term': self.storage.term,
                 'success': False
             }
-            asyncio.ensure_future(self.state.send(response, data['sender']))
+            asyncio.ensure_future(self.state.send(response, data['sender']), loop=self.loop)
             return
 
         return func(self, data)
@@ -65,6 +66,7 @@ class BaseState:
         self.state_machine = self.state.state_machine
 
         self.id = self.state.id
+        self.loop = self.state.loop
 
     @validate_term
     def on_receive_request_vote(self, data):
@@ -203,7 +205,7 @@ class Leader(BaseState):
                 'prev_log_term': self.log[prev_index]['term'] if self.log and prev_index else 0
             })
 
-            asyncio.ensure_future(self.state.send(data, destination))
+            asyncio.ensure_future(self.state.send(data, destination), loop=self.loop)
 
     @validate_commit_index
     @validate_term
@@ -233,7 +235,7 @@ class Leader(BaseState):
         # Send AppendEntries RPC to continue updating fast-forward log (data['success'] == False)
         # or in case there are new entries to sync (data['success'] == data['updated'] == True)
         if self.log.last_log_index >= self.log.next_index[sender_id]:
-            asyncio.ensure_future(self.append_entries(destination=sender_id))
+            asyncio.ensure_future(self.append_entries(destination=sender_id), loop=self.loop)
 
     def update_commit_index(self):
         commited_on_majority = 0
@@ -257,17 +259,17 @@ class Leader(BaseState):
 
     async def execute_command(self, command):
         """Write to log & send AppendEntries RPC"""
-        self.apply_future = asyncio.Future()
+        self.apply_future = asyncio.Future(loop=self.loop)
 
         entry = self.log.write(self.storage.term, command)
-        asyncio.ensure_future(self.append_entries())
+        asyncio.ensure_future(self.append_entries(), loop=self.loop)
 
         await self.apply_future
 
     def heartbeat(self):
         self.request_id += 1
         self.response_map[self.request_id] = set()
-        asyncio.ensure_future(self.append_entries())
+        asyncio.ensure_future(self.append_entries(), loop=self.loop)
 
 
 class Candidate(BaseState):
@@ -285,7 +287,7 @@ class Candidate(BaseState):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.election_timer = Timer(self.election_interval, self.start)
+        self.election_timer = Timer(self.election_interval, self.state.to_follower)
         self.vote_count = 0
 
     def start(self):
@@ -396,7 +398,7 @@ class Follower(BaseState):
 
                     'request_id': data['request_id']
                 }
-                asyncio.ensure_future(self.state.send(response, data['sender']))
+                asyncio.ensure_future(self.state.send(response, data['sender']), loop=self.loop)
                 return
         except IndexError:
             pass
@@ -429,7 +431,7 @@ class Follower(BaseState):
             'last_log_index': self.log.last_log_index,
             'request_id': data['request_id']
         }
-        asyncio.ensure_future(self.state.send(response, data['sender']))
+        asyncio.ensure_future(self.state.send(response, data['sender']), loop=self.loop)
 
         self.election_timer.reset()
 
@@ -459,7 +461,7 @@ class Follower(BaseState):
                 'vote_granted': up_to_date
             }
 
-            asyncio.ensure_future(self.state.send(response, data['sender']))
+            asyncio.ensure_future(self.state.send(response, data['sender']), loop=self.loop)
 
     def start_election(self):
         self.state.to_candidate()
@@ -469,10 +471,9 @@ def leader_required(func):
 
     @functools.wraps(func)
     def wrapped(cls, *args, **kwargs):
-        loop = asyncio.get_event_loop()
         if cls.leader is None:
-            cls.leader_future = asyncio.Future()
-            loop.run_until_complete(cls.leader_future)
+            cls.leader_future = asyncio.Future(loop=cls.loop)
+            cls.loop.run_until_complete(cls.leader_future)
 
         if not isinstance(cls.leader, Leader):
             raise NotALeaderException(
@@ -497,6 +498,7 @@ class State:
     def __init__(self, server):
         self.server = server
         self.id = self._get_id(server.host, server.port)
+        self.__class__.loop = self.server.loop
 
         self.storage = FileStorage(self.id)
         self.log = Log(self.id)
@@ -518,8 +520,7 @@ class State:
     @classmethod
     @leader_required
     def set_value(cls, name, value):
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(cls.leader.execute_command({name: value}))
+        cls.loop.run_until_complete(cls.leader.execute_command({name: value}))
 
     def send(self, data, destination):
         return self.server.send(data, destination)
@@ -552,10 +553,12 @@ class State:
     def to_leader(self):
         self._change_state(Leader)
         self.set_leader(self.state)
+        config.on_leader()
 
     def to_follower(self):
         self._change_state(Follower)
         self.set_leader(None)
+        config.on_follower()
 
     def set_leader(self, leader):
         cls = self.__class__
@@ -567,33 +570,3 @@ class State:
         self.state.stop()
         self.state = new_state(self)
         self.state.start()
-
-
-class Timer:
-    """Scheduling periodic callbacks"""
-    def __init__(self, interval, callback):
-        self.interval = interval
-        self.callback = callback
-        self.loop = asyncio.get_event_loop()
-
-        self.is_active = False
-
-    def start(self):
-        self.is_active = True
-        self.handler = self.loop.call_later(self.get_interval(), self._run)
-
-    def _run(self):
-        if self.is_active:
-            self.callback()
-            self.handler = self.loop.call_later(self.get_interval(), self._run)
-
-    def stop(self):
-        self.is_active = False
-        self.handler.cancel()
-
-    def reset(self):
-        self.stop()
-        self.start()
-
-    def get_interval(self):
-        return self.interval() if callable(self.interval) else self.interval
