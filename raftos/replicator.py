@@ -1,41 +1,86 @@
 from .state import State
 
 
-class ReplicatedObjectWrapper:
-    def __init__(self, value):
-        self.value = value
-
-    def get(self):
-        return self.value
-
-    def set(self, new_value):
-        self.value = new_value
-
-
 class Replicated:
     """Replication descriptor makes sure data changes are all applied to State Machine"""
-
-    def __init__(self, name, default=None):
+    DEFAULT_VALUE = None
+    def __init__(self, name, default='REPLICATED_DEFAULT'):
         self.name = name
-        self.replicated_object = ReplicatedObjectWrapper(default)
+
+        # For subclasses like ReplicatedDict
+        if default == 'REPLICATED_DEFAULT':
+            self.value = self.DEFAULT_VALUE
+        else:
+            self.value = default
+
         self.in_memory = False
 
-    def __get__(self, obj, obj_type):
+    async def get(self):
         # If we didn't set a value in this life cycle try to get it from State Machine
         if not self.in_memory:
             try:
-                self.replicated_object.set(
-                    State.get_value(self.get_name(obj))
-                )
+                self.value = await State.get_value(self.name)
             except KeyError:
                 pass
 
-        return self.replicated_object.get()
+        return self.value
 
-    def __set__(self, obj, value):
-        State.set_value(self.get_name(obj), value)
-        self.replicated_object.set(value)
+    async def set(self, value):
+        await State.set_value(self.name, value)
+        self.value = value
         self.in_memory = True
 
-    def get_name(self, obj):
-        return '{}.{}'.format(obj.__class__.__name__, self.name)
+
+class ReplicatedContainer(Replicated):
+    async def __getitem__(self, key):
+        return (await self.get()).__getitem__(key)
+
+    async def length(self):
+        data = await self.get()
+        return len(data)
+
+
+class ReplicatedDict(ReplicatedContainer):
+    DEFAULT_VALUE = {}
+
+    async def update(self, kwargs):
+        data = await self.get()
+        data.update(kwargs)
+        await self.set(data)
+
+    async def keys(self):
+        data = await self.get()
+        return data.keys()
+
+    async def values(self):
+        data = await self.get()
+        return data.values()
+
+    async def items(self):
+        data = await self.get()
+        return data.items()
+
+    async def pop(self, key, defaul):
+        data = await self.get()
+        item = data.pop(key, default)
+        await self.set(data)
+        return item
+
+    async def delete(self, key):
+        data = await self.get()
+        del data[key]
+        await self.set(data)
+
+
+class ReplicatedList(ReplicatedContainer):
+    DEFAULT_VALUE = []
+
+    async def append(self, kwargs):
+        data = await self.get()
+        data.append(kwargs)
+        await self.set(data)
+
+    async def extend(self, lst):
+        data = await self.get()
+        data.extend(lst)
+        await self.set(data)

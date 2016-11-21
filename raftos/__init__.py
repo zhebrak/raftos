@@ -1,24 +1,23 @@
 from .conf import configure, config
-from .replicator import Replicated
+from .replicator import Replicated, ReplicatedDict, ReplicatedList
 from .server import register, stop
-from .state import State, Leader
+from .state import State
 
 
 __all__ = [
     'Replicated',
+    'ReplicatedDict',
+    'ReplicatedList',
 
     'config',
     'configure',
     'register',
     'stop',
 
-    'get_leader'
+    'get_leader',
+    'wait_until_leader'
 ]
 
 
-def get_leader():
-    leader = State.leader
-    if isinstance(leader, Leader):
-        return leader.id
-
-    return leader
+get_leader = State.get_leader
+wait_until_leader = State.wait_until_leader

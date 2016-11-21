@@ -6,25 +6,32 @@ import random
 import raftos
 
 
-class Class:
-    data = raftos.Replicated(name='data')
+async def run(node_id):
+    # Any replicated object with get/set functions
+    data_id = raftos.Replicated(name='data_id')
 
+    # Dict-like object: data.update(), data['key'] etc
+    data = raftos.ReplicatedDict(name='data')
 
-def run(node_id):
-    obj = Class()
-    loop = asyncio.get_event_loop()
+    # List-like object: data_list.append(), data_list[-1]
+    data_list = raftos.ReplicatedList(name='data_list')
 
     while True:
-        loop.run_until_complete(asyncio.sleep(5))
+        # We can also check if raftos.get_leader() == node_id
+        await raftos.wait_until_leader(node_id)
 
-        if raftos.get_leader() == node_id:
-            obj.data = {
-                'id': random.randint(1, 1000),
-                'data': {
-                    'amount': random.randint(1, 1000) * 1000,
-                    'created_at': datetime.now().strftime('%d/%m/%y %H:%M')
-                }
+        await asyncio.sleep(2)
+
+        current_id = random.randint(1, 1000)
+        data_map = {
+            str(current_id): {
+                'created_at': datetime.now().strftime('%d/%m/%y %H:%M')
             }
+        }
+
+        await data_id.set(current_id)
+        await data.update(data_map)
+        await data_list.append(data_map)
 
 
 if __name__ == '__main__':
@@ -41,5 +48,6 @@ if __name__ == '__main__':
         'serializer': raftos.serializers.JSONSerializer
     })
 
-    raftos.register(node, cluster=cluster)
-    run(node)
+    loop = asyncio.get_event_loop()
+    loop.create_task(raftos.register(node, cluster=cluster))
+    loop.run_until_complete(run(node))

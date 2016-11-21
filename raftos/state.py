@@ -470,17 +470,14 @@ class Follower(BaseState):
 def leader_required(func):
 
     @functools.wraps(func)
-    def wrapped(cls, *args, **kwargs):
-        if cls.leader is None:
-            cls.leader_future = asyncio.Future(loop=cls.loop)
-            cls.loop.run_until_complete(cls.leader_future)
-
+    async def wrapped(cls, *args, **kwargs):
+        await cls.wait_for_election_success()
         if not isinstance(cls.leader, Leader):
             raise NotALeaderException(
                 'Leader is {}!'.format(cls.leader or 'not chosen yet')
             )
 
-        return func(cls, *args, **kwargs)
+        return await func(cls, *args, **kwargs)
     return wrapped
 
 
@@ -494,6 +491,10 @@ class State:
 
     # Await this future for election ending
     leader_future = None
+
+    # Node id that's waiting until it becomes leader and corresponding future
+    wait_until_leader_id = None
+    wait_until_leader_future = None
 
     def __init__(self, server):
         self.server = server
@@ -514,13 +515,13 @@ class State:
 
     @classmethod
     @leader_required
-    def get_value(cls, name):
+    async def get_value(cls, name):
         return cls.leader.state_machine[name]
 
     @classmethod
     @leader_required
-    def set_value(cls, name, value):
-        cls.loop.run_until_complete(cls.leader.execute_command({name: value}))
+    async def set_value(cls, name, value):
+        await cls.leader.execute_command({name: value})
 
     def send(self, data, destination):
         return self.server.send(data, destination)
@@ -553,20 +554,62 @@ class State:
     def to_leader(self):
         self._change_state(Leader)
         self.set_leader(self.state)
-        config.on_leader()
+        if asyncio.iscoroutinefunction(config.on_leader):
+            asyncio.ensure_future(config.on_leader())
+        else:
+            config.on_leader()
 
     def to_follower(self):
         self._change_state(Follower)
         self.set_leader(None)
-        config.on_follower()
+        if asyncio.iscoroutinefunction(config.on_follower):
+            asyncio.ensure_future(config.on_follower())
+        else:
+            config.on_follower()
 
     def set_leader(self, leader):
         cls = self.__class__
         cls.leader = leader
+
         if cls.leader and cls.leader_future and not cls.leader_future.done():
+            # We release the future when leader is elected
             cls.leader_future.set_result(cls.leader)
+
+        if cls.wait_until_leader_id and (
+            cls.wait_until_leader_future and not cls.wait_until_leader_future.done()
+        ) and cls.get_leader() == cls.wait_until_leader_id:
+            # We release the future when specific node becomes a leader
+            cls.wait_until_leader_future.set_result(cls.leader)
 
     def _change_state(self, new_state):
         self.state.stop()
         self.state = new_state(self)
         self.state.start()
+
+    @classmethod
+    def get_leader(cls):
+        if isinstance(cls.leader, Leader):
+            return cls.leader.id
+
+        return cls.leader
+
+    @classmethod
+    async def wait_for_election_success(cls):
+        """Await this function if your cluster must have a leader"""
+        if cls.leader is None:
+            cls.leader_future = asyncio.Future(loop=cls.loop)
+            await cls.leader_future
+
+    @classmethod
+    async def wait_until_leader(cls, node_id):
+        """Await this function if you want to do nothing until node_id becomes a leader"""
+        if node_id is None:
+            raise ValueError('Node id can not be None!')
+
+        if cls.get_leader() != node_id:
+            cls.wait_until_leader_id = node_id
+            cls.wait_until_leader_future = asyncio.Future(loop=cls.loop)
+            await cls.wait_until_leader_future
+
+            cls.wait_until_leader_id = None
+            cls.wait_until_leader_future = None

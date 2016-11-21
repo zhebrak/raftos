@@ -5,7 +5,7 @@ from .network import UDPProtocol
 from .state import State
 
 
-def register(*address_list, cluster=None, loop=None):
+async def register(*address_list, cluster=None, loop=None):
     """Start Raft node (server)
     Args:
         address_list — 127.0.0.1:8000 [, 127.0.0.1:8001 ...]
@@ -16,7 +16,7 @@ def register(*address_list, cluster=None, loop=None):
     for address in address_list:
         host, port = address.split(':')
         node = Node(address=(host, int(port)), loop=loop)
-        node.start()
+        await node.start()
 
         for address in cluster:
             host, port = address.split(':')
@@ -45,18 +45,17 @@ class Node:
         self.requests = asyncio.Queue(loop=self.loop)
         self.__class__.nodes.append(self)
 
-    def start(self):
+    async def start(self):
         protocol = UDPProtocol(
             queue=self.requests,
             request_handler=self.request_handler,
             loop=self.loop
         )
         address = self.host, self.port
-        task = asyncio.Task(
+        self.transport, _ = await asyncio.Task(
             self.loop.create_datagram_endpoint(protocol, local_addr=address),
             loop=self.loop
         )
-        self.transport, _ = self.loop.run_until_complete(task)
         self.state.start()
 
     def stop(self):
