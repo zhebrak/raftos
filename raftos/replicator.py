@@ -2,8 +2,13 @@ from .state import State
 
 
 class Replicated:
-    """Replication descriptor makes sure data changes are all applied to State Machine"""
+    """
+    Replication class makes sure data changes are all applied to State Machine
+    You can create your own Storage by subclassing it
+    """
+
     DEFAULT_VALUE = None
+
     def __init__(self, name, default='REPLICATED_DEFAULT'):
         self.name = name
 
@@ -41,6 +46,8 @@ class ReplicatedContainer(Replicated):
 
 
 class ReplicatedDict(ReplicatedContainer):
+    """Replication class with dict-like methods"""
+
     DEFAULT_VALUE = {}
 
     async def update(self, kwargs):
@@ -60,7 +67,7 @@ class ReplicatedDict(ReplicatedContainer):
         data = await self.get()
         return data.items()
 
-    async def pop(self, key, defaul):
+    async def pop(self, key, default):
         data = await self.get()
         item = data.pop(key, default)
         await self.set(data)
@@ -73,6 +80,8 @@ class ReplicatedDict(ReplicatedContainer):
 
 
 class ReplicatedList(ReplicatedContainer):
+    """Replication class with list-like methods"""
+
     DEFAULT_VALUE = []
 
     async def append(self, kwargs):

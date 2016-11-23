@@ -1,3 +1,5 @@
+.idea/*
+
 env/*
 build/*
 dist/*
