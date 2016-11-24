@@ -1,4 +1,19 @@
+import asyncio
+import functools
+
 from .state import State
+
+
+def atomic_method(func):
+
+    @functools.wraps(func)
+    async def wrapped(self, *args, **kwargs):
+        with await self.lock:
+            result = await func(self, *args, **kwargs)
+
+        return result
+
+    return wrapped
 
 
 class Replicated:
@@ -10,6 +25,7 @@ class Replicated:
     DEFAULT_VALUE = None
 
     def __init__(self, name, default='REPLICATED_DEFAULT'):
+        self.lock = asyncio.Lock()
         self.name = name
 
         # For subclasses like ReplicatedDict
@@ -50,6 +66,7 @@ class ReplicatedDict(ReplicatedContainer):
 
     DEFAULT_VALUE = {}
 
+    @atomic_method
     async def update(self, kwargs):
         data = await self.get()
         data.update(kwargs)
@@ -67,12 +84,14 @@ class ReplicatedDict(ReplicatedContainer):
         data = await self.get()
         return data.items()
 
+    @atomic_method
     async def pop(self, key, default):
         data = await self.get()
         item = data.pop(key, default)
         await self.set(data)
         return item
 
+    @atomic_method
     async def delete(self, key):
         data = await self.get()
         del data[key]
@@ -84,11 +103,13 @@ class ReplicatedList(ReplicatedContainer):
 
     DEFAULT_VALUE = []
 
+    @atomic_method
     async def append(self, kwargs):
         data = await self.get()
         data.append(kwargs)
         await self.set(data)
 
+    @atomic_method
     async def extend(self, lst):
         data = await self.get()
         data.extend(lst)
