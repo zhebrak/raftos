@@ -70,7 +70,6 @@ if __name__ == '__main__':
     processes = set([])
 
     try:
-
         for neighbour in neighbours:
             node_args = (args.log_dir, neighbour, neighbours - {neighbour})
             p = Process(target=main, args=node_args)
@@ -82,6 +81,7 @@ if __name__ == '__main__':
         while processes:
             for process in tuple(processes):
                 process.join()
+                processes.remove(process)
     finally:
         for process in processes:
             if process.is_alive():
