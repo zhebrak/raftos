@@ -1,5 +1,9 @@
-import json
 import msgpack
+
+try:
+    import ujson as json
+except ImportError:
+    import json
 
 
 class JSONSerializer:
