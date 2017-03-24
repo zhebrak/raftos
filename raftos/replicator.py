@@ -12,7 +12,6 @@ def atomic_method(func):
             result = await func(self, *args, **kwargs)
 
         return result
-
     return wrapped
 
 
