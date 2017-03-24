@@ -14,12 +14,12 @@ async def register(*address_list, cluster=None, loop=None):
 
     loop = loop or asyncio.get_event_loop()
     for address in address_list:
-        host, port = address.split(':')
+        host, port = address.rsplit(':', 1)
         node = Node(address=(host, int(port)), loop=loop)
         await node.start()
 
         for address in cluster:
-            host, port = address.split(':')
+            host, port = address.rsplit(':', 1)
             port = int(port)
 
             if (host, port) != (node.host, node.port):
