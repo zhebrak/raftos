@@ -21,7 +21,6 @@ class Configuration:
             'election_interval_spread': 3,
 
             # For UDP messages encryption
-            'use_protocol_encryption': False,
             'secret_key': b'raftos sample secret key',
             'salt': b'raftos sample salt',
 
@@ -39,9 +38,6 @@ class Configuration:
             self.step_down_interval,
             self.step_down_interval * self.election_interval_spread
         )
-        if self.use_protocol_encryption:
-            from . cryptor import enable_encryption
-            enable_encryption()
 
 
 config = Configuration()
