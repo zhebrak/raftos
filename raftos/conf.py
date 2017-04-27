@@ -1,6 +1,5 @@
 from .serializers import MessagePackSerializer
 
-
 class Configuration:
     def __init__(self):
         self.configure(self.default_settings())
