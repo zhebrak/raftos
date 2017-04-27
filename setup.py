@@ -7,6 +7,7 @@ __version__ = '0.2.3'
 
 short_description = 'Raft replication in Python'
 requirements = [req.strip() for req in open('requirements.txt').readlines()]
+crypto_reqs = [req.strip() for req in open('requirements-cryptography.txt').readlines()]
 
 setup(
     name='raftos',
@@ -20,6 +21,9 @@ setup(
     url='https://github.com/zhebrak/raftos',
     keywords=['python', 'raft', 'replication'],
     install_requires=requirements,
+    extras_require={
+        'cryptography': crypto_reqs,
+    },
     include_package_data=True,
     classifiers=[],
 )
