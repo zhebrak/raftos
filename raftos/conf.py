@@ -1,4 +1,4 @@
-from .cryptor import default_cryptor
+from .cryptors import default_cryptor
 from .serializers import MessagePackSerializer
 
 
