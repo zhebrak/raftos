@@ -24,6 +24,7 @@ class Configuration:
             # For UDP messages encryption
             'secret_key': b'raftos sample secret key',
             'salt': b'raftos sample salt',
+            'crypto_enabled': True,
 
             # Election callbacks
             'on_leader': lambda: None,

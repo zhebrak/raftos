@@ -1,11 +1,14 @@
 import base64
 
-from cryptography.fernet import Fernet
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-
 from .conf import config
+
+try:
+    from cryptography.fernet import Fernet
+    from cryptography.hazmat.backends import default_backend
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+except ImportError:
+    config.crypto_enabled = False
 
 
 class Cryptor:
@@ -26,4 +29,15 @@ class Cryptor:
         return self.f.decrypt(data)
 
 
-cryptor = Cryptor()
+class DummyCryptor:
+    def encrypt(self, data):
+        return data
+
+    def decrypt(self, data):
+        return data
+
+
+if config.crypto_enabled:
+    cryptor = Cryptor()
+else:
+    cryptor = DummyCryptor()
