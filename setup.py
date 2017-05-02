@@ -3,7 +3,7 @@
 from setuptools import setup
 
 
-__version__ = '0.2.4'
+__version__ = '0.2.5'
 
 short_description = 'Raft replication in Python'
 requirements = [req.strip() for req in open('requirements.txt').readlines()]
