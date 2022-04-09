@@ -1,2 +1,4 @@
 cryptography==3.3
 msgpack-python==0.4.8
+pip install setuptools
+python3 setup.py install
