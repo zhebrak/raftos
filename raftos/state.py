@@ -1,7 +1,6 @@
 import asyncio
 import functools
 import random
-import time
 
 from .conf import config
 from .exceptions import NotALeaderException
@@ -30,7 +29,8 @@ def validate_term(func):
             response = {
                 'type': '{}_response'.format(data['type']),
                 'term': self.storage.term,
-                'success': False
+                'success': False,
+                'request_id': data['request_id'] if data.get('request_id') else None
             }
             asyncio.ensure_future(self.state.send(response, data['sender']), loop=self.loop)
             return
