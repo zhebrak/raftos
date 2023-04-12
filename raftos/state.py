@@ -1,7 +1,6 @@
 import asyncio
 import functools
 import random
-import time
 
 from .conf import config
 from .exceptions import NotALeaderException
@@ -227,8 +226,9 @@ class Leader(BaseState):
             self.log.next_index[sender_id] = max(self.log.next_index[sender_id] - 1, 1)
 
         else:
-            self.log.next_index[sender_id] = data['last_log_index'] + 1
-            self.log.match_index[sender_id] = data['last_log_index']
+            if data['last_log_index'] > self.log.match_index[sender_id]:
+                self.log.next_index[sender_id] = data['last_log_index'] + 1
+                self.log.match_index[sender_id] = data['last_log_index']
 
             self.update_commit_index()
 
