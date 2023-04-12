@@ -1,7 +1,6 @@
 import asyncio
 import functools
 import random
-import time
 
 from .conf import config
 from .exceptions import NotALeaderException
@@ -252,7 +251,7 @@ class Leader(BaseState):
                 commited_on_majority = index
 
             else:
-                break
+                continue
 
         if commited_on_majority > self.log.commit_index:
             self.log.commit_index = commited_on_majority
