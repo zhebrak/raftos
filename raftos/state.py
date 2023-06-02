@@ -406,18 +406,21 @@ class Follower(BaseState):
 
         # If an existing entry conflicts with a new one (same index but different terms),
         # delete the existing entry and all that follow it
+        is_append = True
         new_index = data['prev_log_index'] + 1
         try:
-            if self.log[new_index]['term'] != data['term'] or (
-                self.log.last_log_index != prev_log_index
-            ):
+            if self.log[new_index]['term'] != data['entries'][0]['term']:
                 self.log.erase_from(new_index)
+            else:
+                # Ensure that matching entries are not erased and appended again
+                is_append = False
         except IndexError:
             pass
 
-        # It's always one entry for now
-        for entry in data['entries']:
-            self.log.write(entry['term'], entry['command'])
+        if is_append:
+            # It's always one entry for now
+            for entry in data['entries']:
+                self.log.write(entry['term'], entry['command'])
 
         # Update commit index if necessary
         if self.log.commit_index < data['commit_index']:
